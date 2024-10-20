@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"encoding/binary"
+	"fmt"
 	"log"
 	"os"
 )
@@ -56,8 +58,51 @@ func findExifSegment(data []byte) int {
 
 func progressExifData(data []byte) {
 	// verify the Exif data
-	bytes.IndexFunc() string(data[:6]) != exifHeader {
+	if string(data[:6]) != exifHeader {
 		log.Fatal("Invalid Exif header!")
 	}
-		
-	//
+
+	// check byte algorithm
+	var byteOrder binary.ByteOrder
+
+	// check for Little or Big Endian
+	byteOrder = binary.BigEndian
+	if string(data[6:8]) == tiffLittleEndian {
+		byteOrder = binary.LittleEndian
+	} else if string(data[6:8]) != tiffBigEndian {
+		log.Fatal("Invalid TIFF byte alignment")
+	}
+
+	// Read the TIFF header
+	offset := int(byteOrder.Uint32(data[10:14]))
+
+	// process the IFD (Image File Directory) to get EXIF data
+	processIFD(data[6+offset:], byteOrder)
+}
+
+func processIFD(data []byte, byteOrder binary.ByteOrder) {
+	numEntries := int(byteOrder.Uint16(data[:2]))
+
+	for i := 0; i < numEntries; i++ {
+		entryOffset := 2 + i*12
+		tag := byteOrder.Uint16(data[entryOffset : entryOffset+2])
+		dataType := byteOrder.Uint16(data[entryOffset+2 : entryOffset+4])
+		numValues := byteOrder.Uint32(data[entryOffset+4 : entryOffset+8])
+		valueOffset := byteOrder.Uint32(data[entryOffset+8 : entryOffset+12])
+
+		fmt.Printf("Tag: 0x%04X, DataType: %d, NumValues: %d, ValueOffset: %d\n", tag, dataType, numValues, valueOffset)
+
+		switch tag {
+		case 0x010F: // Manufacturer tag
+			fmt.Println("Manufacturer:", readString(data, valueOffset, numValues))
+		case 0x0110: // Camera model tag
+			fmt.Println("Camera model:", readString(data, valueOffset, numValues))
+		case 0x9003: // Date taken tag
+			fmt.Println("Date taken:", readString(data, valueOffset, numValues))
+		}
+	}
+}
+
+func readString(data []byte, offset uint32, length uint32) string {
+	return string(data[offset : offset+length])
+}
