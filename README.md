@@ -1,3 +1,10 @@
+# ExifReader
+
+![alt text](images/image.png)
+
+---
+
+
 JPEG (Joint Photographic Experts Group) is a widely used image format that uses lossy compression to reduce the size of images. The file format is constructed with a well-defined structure of segments that contain image data, metadata, and other information. Understanding the structure of a JPEG file helps in working with image data, metadata (like EXIF), and how compression is applied.
 
 Here’s a breakdown of how a JPEG file is constructed:

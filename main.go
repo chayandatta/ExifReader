@@ -10,62 +10,64 @@ import (
 
 const (
 	// JPEG markers
-	startMarker      = 0xFFD8
-	exifMarker       = 0xFFE1
+	startMarker      = 0xFFD8 // JPEG start of image marker
+	exifMarker       = 0xFFE1 // APP1 marker where EXIF data is stored
 	exifHeader       = "Exif\x00\x00"
-	tiffLittleEndian = "II"
-	tiffBigEndian    = "MM"
+	tiffLittleEndian = "II" // Intel TIFF header
+	tiffBigEndian    = "MM" // Motorola TIFF header
 )
 
 func main() {
-	//Open the JPEG file
-	file, err := os.Open("example.jpg")
+	// Open the JPEG file
+	file, err := os.Open("images/example.jpg")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer file.Close()
 
-	//Let's read the file
+	// Read the entire file into memory
 	fileInfo, _ := file.Stat()
 	fileSize := fileInfo.Size()
 	data := make([]byte, fileSize)
 
 	_, err = file.Read(data)
 	if err != nil {
-		log.Fatal("Failed to Read the file", err)
+		log.Fatal("Failed to read file:", err)
 	}
 
-	// Check for Exif data
+	// Check if the file is a JPEG and contains EXIF data
 	if !bytes.HasPrefix(data, []byte{0xFF, 0xD8}) {
-		log.Fatal("Invalid JPEG file!")
+		log.Fatal("Not a valid JPEG file")
 	}
 
-	//Exif segment (APP1 marker)
-	exifOffset := findExifSegment(data)
+	// Search for the EXIF segment (APP1 marker)
+	exifOffset := findEXIFSegment(data)
 	if exifOffset == -1 {
-		log.Fatal("No Exif data found!")
+		log.Fatal("No EXIF data found")
 	}
+
+	// Process the EXIF header and data
+	processEXIFData(data[exifOffset:])
 }
 
-func findExifSegment(data []byte) int {
-	for i := 0; i < len(data); i++ {
+func findEXIFSegment(data []byte) int {
+	for i := 0; i < len(data)-1; i++ {
 		if data[i] == 0xFF && data[i+1] == 0xE1 {
-			return i + 4 // skip app1 marker length
+			return i + 4 // Skip the APP1 marker and length
 		}
 	}
 	return -1
 }
 
-func progressExifData(data []byte) {
-	// verify the Exif data
+func processEXIFData(data []byte) {
+	// Verify EXIF header
 	if string(data[:6]) != exifHeader {
-		log.Fatal("Invalid Exif header!")
+		log.Fatal("Invalid EXIF header")
 	}
 
-	// check byte algorithm
+	// check for byte algorithm
 	var byteOrder binary.ByteOrder
-
-	// check for Little or Big Endian
+	// Check byte alignment (Little or Big Endian)
 	byteOrder = binary.BigEndian
 	if string(data[6:8]) == tiffLittleEndian {
 		byteOrder = binary.LittleEndian
@@ -76,13 +78,12 @@ func progressExifData(data []byte) {
 	// Read the TIFF header
 	offset := int(byteOrder.Uint32(data[10:14]))
 
-	// process the IFD (Image File Directory) to get EXIF data
+	// Process the IFD (Image File Directory) to get EXIF data
 	processIFD(data[6+offset:], byteOrder)
 }
 
 func processIFD(data []byte, byteOrder binary.ByteOrder) {
 	numEntries := int(byteOrder.Uint16(data[:2]))
-
 	for i := 0; i < numEntries; i++ {
 		entryOffset := 2 + i*12
 		tag := byteOrder.Uint16(data[entryOffset : entryOffset+2])
@@ -96,9 +97,9 @@ func processIFD(data []byte, byteOrder binary.ByteOrder) {
 		case 0x010F: // Manufacturer tag
 			fmt.Println("Manufacturer:", readString(data, valueOffset, numValues))
 		case 0x0110: // Camera model tag
-			fmt.Println("Camera model:", readString(data, valueOffset, numValues))
+			fmt.Println("Camera Model:", readString(data, valueOffset, numValues))
 		case 0x9003: // Date taken tag
-			fmt.Println("Date taken:", readString(data, valueOffset, numValues))
+			fmt.Println("Date Taken:", readString(data, valueOffset, numValues))
 		}
 	}
 }
